@@ -26,7 +26,11 @@
 - 登录页在用户名框下提示可用用户名或邮箱（目录账号与本地账号同一表单）。
 
 ### 修复
-- 自定义 MCP 的已缓存工具在请求前按需刷新 OAuth 凭证，支持并发刷新去重和 401 后一次受控重试；授权失效时提示重新授权，新凭证无需重启或新建对话即可生效（#1353）。
+- 会话选了「放通所有 / 放通这些工具」后，后续 `execute` 等工具仍弹出「需要确认这次操作」：从 LangGraph runnable config 解析 thread id 以跳过审批，Dashboard 对仍卡住的活审批卡自动续跑；`ask_user_question` 仍每次询问。
+- 聊天页不再把普通回答里的「429 / rate_limit / 超时」等字样误判成流式失败：只有模型重试耗尽信封才会升成错误气泡；气泡样式跟随 `status=error`（Fixes #1074）。
+- 开启 TLS 后，内部 MCP（如企查查）改为连 `https://127.0.0.1:{port}/api/internal/mcp/...`，不再误走只做 ACME/跳转的 HTTP companion；本机自签/域名证书跳过 hostname 校验，启动日志会把 factory 写成占位符以免 `json.dumps` 崩溃（Fixes #1499）。
+- MCP / 网关工具名在交给模型前截断到 64 字符（含 `tencent-docs__{id}_create_smartcanvas_by_mdx` 这类前缀名），避免 OpenAI 风格 API 直接拒掉整轮（Fixes #1527）。
+- Dashboard `ask_user_question` 不再一直停在「执行中」且不弹出提问卡：兼容 LangGraph v2 把 interrupt 放到 `chunk["interrupts"]`、解开 Interrupt 信封，并在实时流与历史中还原未回答提问；服务端没有可恢复 pending 时卡片只读，不挡住新消息。
 - 桌面覆盖安装用与服务器 `parse_version` 相同的 PEP 440 规则比较内置与持久运行时，修复同一发布号下 beta 递增（如 `1.0.2b4` → `1.0.2b5`）及预发布转正式版被当成相等、继续加载旧运行时的问题；备份、替换失败回退和不降级保护不变。
 - Postgres 存储后端改为拆字段映射，不再把 URI 当作 `connection_string` 传给 `PostgresConfig`。
 - S3 / Postgres 等旧协议 backend 适配 `ReadResult` / `LsResult`，专家启动与管理端目录树不再因 `'str'.error` 或 `als` 未实现而失败。
@@ -38,6 +42,7 @@
 - Windows 上「存储根目录」选择器不再被限制在 home 所在盘：浏览树改为枚举全部就绪盘符（新增 `GET /api/filesystem/roots`，`/api/filesystem/defaults` 下发 `browse_roots`）
 - 存储根目录提示按平台区分：非 Linux 无 bubblewrap 时不再宣称「沙箱」，改为说明仅限制 AI 工具的文件访问
 - Dashboard 补齐约 200 个缺失的界面文案 key（memory / connectors / skillRecordGuide / proactiveConfig 等）：此前英文界面会整片回退到源码里硬编码的中文，个别位置直接显示 key 路径（Fixes #1238）。
+- 自定义 MCP 的已缓存工具在请求前按需刷新 OAuth 凭证，支持并发刷新去重和 401 后一次受控重试；授权失效时提示重新授权，新凭证无需重启或新建对话即可生效（#1353）。
 
 ## [1.0.2b5] - 2026-09-29
 
