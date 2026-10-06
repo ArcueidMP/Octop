@@ -202,6 +202,29 @@ describe.each([
     expect(message.success).toHaveBeenCalledWith("Deleted 2 conversations");
   });
 
+  it("preserves work status indicators while selecting conversations", async () => {
+    rows["agent-1"] = rows["agent-1"].map((item) => ({
+      ...item,
+      turn_active: item.thread_id === "Alpha",
+      awaiting_user: item.thread_id === "Beta",
+    }));
+    await startSelecting();
+    await userEvent.click(screen.getByLabelText("In progress"));
+    await userEvent.click(screen.getByLabelText("Waiting for you"));
+    expect(
+      screen.getByRole("checkbox", { name: "Select conversation Alpha" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Select conversation Beta" }),
+    ).toBeChecked();
+    expect(selectMock).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByLabelText("In progress")).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText("Waiting for you"));
+    expect(selectMock).toHaveBeenCalledWith("Beta", "agent-1");
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
   it("keeps failed conversations selected and retries only those failures", async () => {
     const remove = deleteMock.getMockImplementation()!;
     deleteMock.mockImplementation(async (agentId, id) => {
@@ -335,6 +358,7 @@ it("keeps Show more reachable after deleting a page when its refill failed", asy
     </MemoryRouter>,
   );
   await screen.findByText("Thread 0");
+  expect(screen.getAllByRole("button", { name: "Show more" })).toHaveLength(1);
   await userEvent.click(
     screen.getByRole("button", { name: "Select conversations" }),
   );

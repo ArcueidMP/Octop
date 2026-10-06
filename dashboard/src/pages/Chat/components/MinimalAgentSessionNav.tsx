@@ -29,9 +29,15 @@ import SessionBatchSelection, {
   type SessionSelection,
 } from "./SessionBatchSelection";
 import { formatThreadTitle } from "../utils/threadTitle";
-import { onSessionEvent, onStreamEvent } from "../hooks/chatStore";
+import { onSessionEvent } from "../hooks/chatStore";
+import { useSessionWorkIds } from "../hooks/useSessionWorkIds";
+import {
+  resolveSessionWorkStatus,
+  type SessionWorkStatus,
+} from "../utils/sessionWorkStatus";
 import SharedExpertHint from "./SharedExpertHint";
 import RemoteExpertHint from "./RemoteExpertHint";
+import SessionWorkStatusIcon from "./SessionWorkStatusIcon";
 import TeamChatBadge from "./TeamChatBadge";
 import styles from "../index.module.less";
 
@@ -97,7 +103,7 @@ function AgentUnreadBadge({ count }: { count: number }) {
 const PreviewSessionRow = memo(function PreviewSessionRow({
   session,
   isActive,
-  working,
+  workStatus,
   onSelect,
   onDelete,
   onRename,
@@ -109,7 +115,7 @@ const PreviewSessionRow = memo(function PreviewSessionRow({
 }: {
   session: Session;
   isActive: boolean;
-  working: boolean;
+  workStatus: SessionWorkStatus;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
@@ -244,13 +250,9 @@ const PreviewSessionRow = memo(function PreviewSessionRow({
         />
       ) : (
         <>
-          {working ? (
-            <span
-              className={styles.sessionRowWorkingDot}
-              title={t("chat.sessionWorking")}
-              aria-label={t("chat.sessionWorking")}
-            />
-          ) : null}
+          <span className={styles.sessionRowLead}>
+            <SessionWorkStatusIcon status={workStatus} />
+          </span>
           <span className={styles.sessionRowTitle}>{session.name}</span>
           {session.pinned ? (
             <span
@@ -301,7 +303,7 @@ export default function MinimalAgentSessionNav({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [byAgent, setByAgent] = useState<Record<string, Session[]>>({});
-  const [workingIds, setWorkingIds] = useState<ReadonlySet<string>>(new Set());
+  const liveWorkingIds = useSessionWorkIds();
   const [loading, setLoading] = useState(false);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() =>
     loadCollapsedFolders(),
@@ -425,21 +427,6 @@ export default function MinimalAgentSessionNav({
       ),
     }));
   }, [activeAgentId, activeSessions]);
-
-  // Turns streamed by this browser tab keep running after the user navigates
-  // away, so the nav marks those threads as busy until the stream ends.
-  useEffect(() => {
-    return onStreamEvent((event) => {
-      setWorkingIds((prev) => {
-        const busy = event.kind !== "streamEnd";
-        if (busy === prev.has(event.sessionId)) return prev;
-        const next = new Set(prev);
-        if (busy) next.add(event.sessionId);
-        else next.delete(event.sessionId);
-        return next;
-      });
-    });
-  }, []);
 
   useEffect(() => {
     return onSessionEvent((event) => {
@@ -642,7 +629,10 @@ export default function MinimalAgentSessionNav({
                           session={session}
                           selection={selection}
                           isActive={session.id === activeId}
-                          working={workingIds.has(session.id)}
+                          workStatus={resolveSessionWorkStatus(
+                            session,
+                            liveWorkingIds,
+                          )}
                           onSelect={(id) => onSelect(id, agent.agent_id)}
                           onDelete={(id) =>
                             void handleDelete(agent.agent_id, id)

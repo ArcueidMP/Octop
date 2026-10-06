@@ -30,6 +30,7 @@ vi.mock("../../../api/modules/octopThreads", async (importOriginal) => ({
     rename: vi.fn(),
     rebind: vi.fn(),
   },
+  normalizeThreadArtifacts: () => [],
 }));
 
 describe("batch conversation deletion", () => {
@@ -220,6 +221,18 @@ describe("toSession / sortSessions ordering", () => {
       "thr_pin",
       "thr_recent",
     ]);
+  });
+
+  it("maps turn_active and awaiting_user onto the session", () => {
+    const session = toSession({
+      thread_id: "thr_work",
+      title: "busy",
+      last_active: 1,
+      turn_active: true,
+      awaiting_user: true,
+    });
+    expect(session.turnActive).toBe(true);
+    expect(session.awaitingUser).toBe(true);
   });
 });
 
