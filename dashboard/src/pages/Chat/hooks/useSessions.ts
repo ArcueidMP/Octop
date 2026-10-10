@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
+import { deleteConversation } from "../utils/deleteConversation";
 import {
   normalizeThreadArtifacts,
   octopThreadsApi,
@@ -368,7 +370,8 @@ export async function deleteSessions(
     }
     try {
       // Bound concurrency: a large selection must not flood the agent/checkpointer.
-      await octopThreadsApi.delete(agentId, id);
+      // Delete only: idle maintenance compacts once instead of pausing the expert per item.
+      await octopThreadsApi.delete(agentId, id, false);
       deletedIds.push(id);
     } catch {
       failedIds.push(id);
@@ -435,6 +438,7 @@ export function resetSessionStoreForTests() {
 }
 
 export function useSessions(agentId: string | null) {
+  const { t } = useTranslation();
   syncStoreToAgent(agentId);
   const { sessions, loading, hasMore, loadingMore } = useSyncExternalStore(
     subscribeSessionStore,
@@ -621,19 +625,16 @@ export function useSessions(agentId: string | null) {
   }, [agentId]);
 
   const deleteSession = useCallback(
-    async (id: string) => {
+    async (id: string, compact: boolean) => {
       if (!agentId || !id) return false;
-      try {
-        await octopThreadsApi.delete(agentId, id);
-        setModuleSessions((prev) => prev.filter((s) => s.id !== id));
-        chatStore.removeSession(id);
-        chatStore.emitSessionEvent({ kind: "sessionDeleted", sessionId: id });
-        return true;
-      } catch {
-        return false;
-      }
+      const deleted = await deleteConversation(agentId, id, compact, t);
+      if (!deleted) return false;
+      setModuleSessions((prev) => prev.filter((s) => s.id !== id));
+      chatStore.removeSession(id);
+      chatStore.emitSessionEvent({ kind: "sessionDeleted", sessionId: id });
+      return true;
     },
-    [agentId],
+    [agentId, t],
   );
 
   const pinSession = useCallback(

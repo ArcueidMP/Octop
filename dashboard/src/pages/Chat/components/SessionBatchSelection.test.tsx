@@ -192,8 +192,8 @@ describe.each([
       await confirmation().onOk?.();
     });
     expect(deleteMock.mock.calls).toEqual([
-      ["agent-1", "Alpha"],
-      ["agent-1", "Beta"],
+      ["agent-1", "Alpha", false],
+      ["agent-1", "Beta", false],
     ]);
     expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
     expect(screen.queryByText("Beta")).not.toBeInTheDocument();
@@ -323,7 +323,7 @@ it("limits a classic search selection to matching, currently listed conversation
   await act(async () => {
     await confirmation().onOk?.();
   });
-  expect(deleteMock.mock.calls).toEqual([["agent-1", "Beta"]]);
+  expect(deleteMock.mock.calls).toEqual([["agent-1", "Beta", false]]);
   expect(rows["agent-1"].map((r) => r.thread_id)).toEqual(["Alpha", "Gamma"]);
 });
 

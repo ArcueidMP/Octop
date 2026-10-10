@@ -74,8 +74,8 @@ describe("batch conversation deletion", () => {
 
     expect(outcome).toEqual({ deletedIds: ["one"], failedIds: ["two"] });
     expect(deleteMock.mock.calls).toEqual([
-      ["agent-a", "one"],
-      ["agent-a", "two"],
+      ["agent-a", "one", false],
+      ["agent-a", "two", false],
     ]);
     expect(result.current.sessions.map((s) => s.id).sort()).toEqual([
       "three",
@@ -116,8 +116,8 @@ describe("batch conversation deletion", () => {
       await pending;
     });
     expect(deleteMock.mock.calls).toEqual([
-      ["agent-a", "one"],
-      ["agent-a", "two"],
+      ["agent-a", "one", false],
+      ["agent-a", "two", false],
     ]);
     expect(result.current.sessions.map((s) => s.id)).toEqual(["three"]);
   });
