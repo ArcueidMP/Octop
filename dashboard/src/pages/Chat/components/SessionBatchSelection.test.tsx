@@ -225,6 +225,58 @@ describe.each([
     expect(deleteMock).not.toHaveBeenCalled();
   });
 
+  it("scopes a search batch to its pinned expert and removes only successful results", async () => {
+    localStorage.setItem("octop:pinned-experts", JSON.stringify(["agent-2"]));
+    rows["agent-2"] = [
+      row("Alpha elsewhere"),
+      row("Alpha retry"),
+      row("Unmatched"),
+    ];
+    const remove = deleteMock.getMockImplementation()!;
+    deleteMock.mockImplementation(async (agentId, id) => {
+      if (id === "Alpha retry") throw new Error("forbidden");
+      return remove(agentId, id);
+    });
+    render(
+      <MemoryRouter>
+        <Layout />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Alpha");
+    await userEvent.type(screen.getByRole("searchbox"), "Alpha");
+    await screen.findByText("Alpha elsewhere");
+    await waitFor(() => expect(listMock).toHaveBeenCalledWith("agent-2", 100));
+    // The pinned expert remains first in both layouts' search results.
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Select conversations" })[0],
+    );
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "Select listed conversations" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Delete (2)" }));
+    await act(async () => {
+      await confirmation().onOk?.();
+    });
+    expect(deleteMock.mock.calls).toHaveLength(2);
+    expect(deleteMock.mock.calls).toEqual(
+      expect.arrayContaining([
+        ["agent-2", "Alpha elsewhere", false],
+        ["agent-2", "Alpha retry", false],
+      ]),
+    );
+    expect(screen.queryByText("Alpha elsewhere")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Select conversation Alpha retry" }),
+    ).toBeChecked();
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(rows["agent-1"]).toHaveLength(3);
+    expect(rows["agent-2"].map((item) => item.thread_id)).toEqual([
+      "Alpha retry",
+      "Unmatched",
+    ]);
+    expect(selectMock).not.toHaveBeenCalled();
+  });
+
   it("keeps failed conversations selected and retries only those failures", async () => {
     const remove = deleteMock.getMockImplementation()!;
     deleteMock.mockImplementation(async (agentId, id) => {
