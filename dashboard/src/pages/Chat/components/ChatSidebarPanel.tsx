@@ -33,7 +33,7 @@ interface ChatSidebarPanelProps {
   onDeleteSession: (
     id: string,
     compact: boolean,
-  ) => void | Promise<boolean | void>;
+  ) => void | Promise<boolean | null | void>;
   onBatchDeleteSessions: BatchDeleteSessions;
   onRenameSession: (id: string, name: string) => void;
   onPinSession: (id: string, pinned: boolean) => void;
@@ -185,6 +185,7 @@ export default function ChatSidebarPanel({
           side={sidebarOpen ? "end" : "start"}
           /* Collapsed: share the nav rail divider — avoid a second gapped line. */
           showLine={sidebarOpen}
+          placement={sidebarOpen ? "center" : "after"}
           className={
             sidebarOpen ? styles.chatRailEdgeOpen : styles.chatRailEdgeClosed
           }

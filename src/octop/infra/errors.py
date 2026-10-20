@@ -35,6 +35,7 @@ class ErrorCode(StrEnum):
     AGENT_NOT_FOUND = "AGENT_NOT_FOUND"
     AGENT_NOT_RUNNING = "AGENT_NOT_RUNNING"
     CHECKPOINT_DELETE_FAILED = "CHECKPOINT_DELETE_FAILED"
+    THREAD_TURN_ACTIVE = "THREAD_TURN_ACTIVE"
     AGENT_FAILED = "AGENT_FAILED"
     AGENT_BUSY = "AGENT_BUSY"
     AGENT_NAME_TAKEN = "AGENT_NAME_TAKEN"
@@ -176,6 +177,7 @@ _DEFAULT_STATUS: dict[ErrorCode, int] = {
     ErrorCode.AGENT_NOT_FOUND: 404,
     ErrorCode.AGENT_NOT_RUNNING: 409,
     ErrorCode.CHECKPOINT_DELETE_FAILED: 409,
+    ErrorCode.THREAD_TURN_ACTIVE: 409,
     ErrorCode.AGENT_FAILED: 500,
     ErrorCode.AGENT_BUSY: 409,
     ErrorCode.AGENT_NAME_TAKEN: 409,
@@ -204,7 +206,9 @@ _DEFAULT_STATUS: dict[ErrorCode, int] = {
     ErrorCode.CONNECTOR_ALREADY_BOUND: 409,
     ErrorCode.CONNECTOR_MCP_LOAD_FAILED: 502,
     ErrorCode.BRIDGE_NOT_FOUND: 404,
-    ErrorCode.BRIDGE_AUTH_FAILED: 401,
+    # Peer credential failure. 400 matches other invalid-credential codes;
+    # 401 would make the dashboard treat it as a dead local session.
+    ErrorCode.BRIDGE_AUTH_FAILED: 400,
     ErrorCode.BRIDGE_PEER_UNREACHABLE: 502,
     ErrorCode.BRIDGE_NOT_CONNECTED: 503,
     ErrorCode.BRIDGE_TUNNEL_FAILED: 502,

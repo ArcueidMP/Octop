@@ -141,8 +141,14 @@ does not set these headers itself.
 Skill copy operations create snapshots; they do not keep the source and
 destination synchronized after the request completes.
 
+Packages default to private (`shared=false`): only the creator (and admins) can
+list or open them. When `shared=true`, other users with the `skill_packages`
+permission can view and mount them; only the creator/admin can edit. `copy_policy`
+and `allow_download` still apply to users who can already view the package.
+
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
+| `GET` | `/skill-packages` | user (`skill_packages`) | Own packages + shared packages; admins see all |
 | `GET` | `/skill-packages?writable_only=true` | user (`skill_packages`) | List only packages the current user may modify; admins may modify all packages |
 | `POST` | `/agents/{id}/skill-packages/{package_id}/copy` | owner (`skill_packages`) | body `{skill_slugs: string[], overwrite?: boolean}`; copy selected package skills into the workspace |
 | `POST` | `/agents/{id}/skills/{slug}/push-to-package` | owner (`skill_packages`) | body `{package_id, overwrite?: boolean}`; copy a workspace skill into a package created by the user (or any package for admins) |
@@ -268,9 +274,13 @@ plugin returns a large `octop_ui` payload, the backend offloads the envelope's
 `"agent"` (run the prompt through the LLM and push the reply).
 Default: `"agent"`. `trigger` accepts cron expressions
 (`"0 9 * * *"`) plus the `interval:N` / `date:ISO8601` aliases
-documented in `infra/cron/trigger.py`. `prompt` must be non-empty and
-≤ 2000 characters. `name` is an optional display label; when omitted,
-the server derives one from `prompt`.
+documented in `infra/cron/trigger.py`. A `date:` job runs once and
+then disables itself, whether the run succeeds or fails; the row stays
+in the list. If the process is down for more than 24 hours past that
+time and the job never ran, `last_status` is `missed` and the job is
+disabled. `prompt` must be non-empty and ≤ 2000 characters. `name` is
+an optional display label; when omitted, the server derives one from
+`prompt`.
 
 ## Providers
 

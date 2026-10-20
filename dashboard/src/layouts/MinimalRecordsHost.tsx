@@ -80,7 +80,7 @@ export default function MinimalRecordsHost() {
         compact,
         t,
       );
-      if (!deleted) return false;
+      if (deleted !== true) return deleted;
       emitSessionEvent({ kind: "sessionDeleted", sessionId });
       if (pathThreadId === sessionId) {
         navigate(`/chat/${resolvedAgentId}`, { replace: true });
@@ -138,7 +138,7 @@ export default function MinimalRecordsHost() {
       onSelect={handleSelect}
       onAgentSelect={handleAgentSelect}
       onNewChat={handleNewChat}
-      onDeleteActive={(id, compact) => void handleDeleteActive(id, compact)}
+      onDeleteActive={handleDeleteActive}
       onBatchDelete={deleteSessions}
       onRenameActive={handleRenameActive}
       onPinActive={handlePinActive}
