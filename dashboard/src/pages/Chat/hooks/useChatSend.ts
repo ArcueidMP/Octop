@@ -209,6 +209,7 @@ export function useChatSend({
           composerContext?.reasoningEffort ?? reasoningEffort,
           mode,
           policy,
+          userMsg.id,
         );
         navigate(`/chat/${agent}/${tid}`, { replace: true });
       });

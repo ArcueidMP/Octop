@@ -973,6 +973,7 @@ export function useChat(
         reasoningEffort,
         conversationMode,
         hitlPolicy,
+        userMsg.id,
       );
     },
     [stableSessionId],
@@ -1050,7 +1051,11 @@ export function useChat(
         const keptOlder = firstOverlap > 0;
         chatStore.setHistoryPage(
           key,
-          mergeHistoryWithLocalTail(loaded.messages, local),
+          mergeHistoryWithLocalTail(
+            loaded.messages,
+            local,
+            current.isStreaming,
+          ),
           {
             hasMore: keptOlder ? current.historyHasMore : loaded.hasMore,
             nextOffset: keptOlder
@@ -1179,7 +1184,7 @@ export function useChat(
         const keptOlder = firstOverlap > 0;
         chatStore.setHistoryPage(
           key,
-          mergeHistoryWithLocalTail(latest, local),
+          mergeHistoryWithLocalTail(latest, local, current.isStreaming),
           {
             hasMore: keptOlder ? current.historyHasMore : hasMore,
             nextOffset: keptOlder ? current.historyNextOffset : nextOffset,

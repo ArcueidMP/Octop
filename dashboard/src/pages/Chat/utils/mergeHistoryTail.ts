@@ -1,9 +1,5 @@
 import type { ChatMessage } from "../hooks/sseHelpers";
 
-function textOf(message: ChatMessage): string {
-  return (message.content || "").trim();
-}
-
 function lastUserIndex(messages: ChatMessage[]): number {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === "user") return i;
@@ -26,7 +22,6 @@ function assistantRichness(messages: ChatMessage[]): number {
     for (const block of message.contentBlocks ?? []) {
       if (block.type === "text") score += (block.content || "").length;
     }
-    if (message.status === "streaming") score += 1;
   }
   return score;
 }
@@ -52,44 +47,16 @@ function localTailRicher(local: ChatMessage[], server: ChatMessage[]): boolean {
   return toolRichness(local) > toolRichness(server);
 }
 
-/**
- * Same user text, and the local copy is not a later resend of that text.
- * Returns the user indexes, or null when the tails are different turns.
- */
+/** Match local and cached turns by the persisted user message id. */
 function sameUserTurn(
   base: ChatMessage[],
   tail: ChatMessage[],
 ): { baseUserIdx: number; tailUserIdx: number } | null {
-  const tailUserIdx = lastUserIndex(tail);
-  if (tailUserIdx < 0) return null;
-  const tailText = textOf(tail[tailUserIdx]);
-  if (!tailText) return null;
   const baseUserIdx = lastUserIndex(base);
-  if (baseUserIdx < 0) return null;
-  if (textOf(base[baseUserIdx]) !== tailText) return null;
-  const baseTs = base[baseUserIdx].timestamp || 0;
-  const tailTs = tail[tailUserIdx].timestamp || 0;
-  if (baseTs > 0 && tailTs > baseTs + 1000) return null;
+  const tailUserIdx = lastUserIndex(tail);
+  if (baseUserIdx < 0 || tailUserIdx < 0) return null;
+  if (base[baseUserIdx].id !== tail[tailUserIdx].id) return null;
   return { baseUserIdx, tailUserIdx };
-}
-
-/**
- * Keep a local reply when the server copy of the same turn is shorter.
- * A finished server turn with at least as much text wins, so ids stay stable.
- */
-function applyRicherTail(
-  base: ChatMessage[],
-  localTail: ChatMessage[],
-): ChatMessage[] {
-  if (localTail.length === 0) return base;
-  const match = sameUserTurn(base, localTail);
-  if (!match) return [...base, ...localTail];
-  const baseAfter = base.slice(match.baseUserIdx + 1);
-  const tailAfter = localTail.slice(match.tailUserIdx + 1);
-  if (localTailRicher(tailAfter, baseAfter)) {
-    return [...base.slice(0, match.baseUserIdx + 1), ...tailAfter];
-  }
-  return base;
 }
 
 /**
@@ -113,30 +80,56 @@ export function preferLocalTranscript(
   return memory;
 }
 
-/** True when `loaded` already contains everything the cache was holding. */
+/** True when server history can replace this cached turn. */
 export function serverCaughtUp(
   loaded: ChatMessage[],
   cached: ChatMessage[],
 ): boolean {
   if (cached.length === 0) return true;
-  return applyRicherTail(loaded, inFlightTail(cached)) === loaded;
+  const tail = inFlightTail(cached);
+  const userIdx = lastUserIndex(tail);
+  if (userIdx < 0) return false;
+  const loadedUserIdx = loaded.findIndex(
+    (message) => message.role === "user" && message.id === tail[userIdx].id,
+  );
+  if (loadedUserIdx < 0) return false;
+  const localReply = tail.slice(userIdx + 1);
+  if (localReply.length === 0) return true;
+  const serverReply = loaded.slice(loadedUserIdx + 1);
+  if (serverReply.length === 0) return false;
+  // A later stored user turn also retires an older cached stream.
+  if (serverReply.some((message) => message.role === "user")) return true;
+  return (
+    !localReply.some((message) => message.status === "streaming") ||
+    !localTailRicher(localReply, serverReply)
+  );
+}
+
+/** Index of a user message in `tail` whose id the server page does not have. */
+function newSendIndex(tail: ChatMessage[], loadedIds: Set<string>): number {
+  return tail.findIndex(
+    (message) => message.role === "user" && !loadedIds.has(message.id),
+  );
 }
 
 /**
  * Apply a server history page without dropping a turn the user just sent.
  *
+ * The dashboard send stores the optimistic user id on the checkpoint
+ * HumanMessage. A finished turn therefore shares that id with the server
+ * page. Keep a richer local reply while streaming; after it finishes,
+ * the server reply replaces the local bubbles, even if its text is shorter.
+ * A later send keeps its own id until that row is stored.
+ *
  * Opening an old thread fetches history before the optimistic bubble exists.
  * The response then replaces the list and the bubble vanishes, while the
  * WebSocket turn keeps running. Messages after the last shared id are that
  * local turn and stay on screen until the server page already includes them.
- *
- * An in-flight reply is not in the database until the turn finishes, so a
- * history page can contain the user message (or a shorter checkpoint) while
- * the browser still holds the longer stream. The longer assistant tail wins.
  */
 export function mergeHistoryWithLocalTail(
   loaded: ChatMessage[],
   current: ChatMessage[],
+  isStreaming = false,
 ): ChatMessage[] {
   if (current.length === 0) return loaded;
   if (loaded.length === 0) return current;
@@ -147,7 +140,9 @@ export function mergeHistoryWithLocalTail(
   );
 
   if (firstOverlap < 0) {
-    return applyRicherTail(loaded, inFlightTail(current));
+    // This page does not contain the optimistic user id, so the turn is not
+    // stored here yet.
+    return [...loaded, ...inFlightTail(current)];
   }
 
   let lastOverlap = firstOverlap;
@@ -163,13 +158,22 @@ export function mergeHistoryWithLocalTail(
   const base = [...olderPrefix, ...loaded];
   if (localTail.length === 0) return base;
 
+  const freshSend = newSendIndex(localTail, loadedIds);
+  if (freshSend >= 0) return [...base, ...localTail.slice(freshSend)];
+
   const overlapId = current[lastOverlap].id;
   const loadedOverlap = loaded.findIndex((message) => message.id === overlapId);
   const serverAfter = loadedOverlap >= 0 ? loaded.slice(loadedOverlap + 1) : [];
+  // User row is stored and the reply is not in this page yet.
   if (serverAfter.length === 0) return [...base, ...localTail];
-  if (localTailRicher(localTail, serverAfter)) {
-    const head = base.slice(0, base.length - serverAfter.length);
-    return [...head, ...localTail];
+  const live =
+    isStreaming || localTail.some((message) => message.status === "streaming");
+  if (
+    live &&
+    !serverAfter.some((message) => message.role === "user") &&
+    localTailRicher(localTail, serverAfter)
+  ) {
+    return [...base.slice(0, base.length - serverAfter.length), ...localTail];
   }
   return base;
 }
